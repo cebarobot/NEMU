@@ -75,10 +75,7 @@ Decode *prev_s;
 
 #ifdef CONFIG_DEBUG
 static inline void debug_hook(vaddr_t pc, const char *asmbuf) {
-  Logti("%s\n", asmbuf);
-  if (g_print_step) {
-    puts(asmbuf);
-  }
+  Logti("hart %ld: %s\n", mhartid->val, asmbuf);
 
   void scan_watchpoint(vaddr_t pc);
   scan_watchpoint(pc);

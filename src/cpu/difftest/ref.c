@@ -302,6 +302,11 @@ void difftest_runahead_init() {
 }
 
 void difftest_init() {
+  char log_file_name[20];
+  sprintf(log_file_name, "hart-%d.log", PMEM_HARTID);
+  void init_log(const char *log_file, const bool fast_log, const bool small_log);
+  init_log(log_file_name, false, false);
+  
   init_mem();
 
   /* Perform ISA dependent initialization. */

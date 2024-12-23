@@ -112,15 +112,15 @@ CONFIG_CC_DEBUG=y
 #
 # Testing and Debugging
 #
-# CONFIG_DEBUG is not set
+CONFIG_DEBUG=y
 CONFIG_DIFFTEST_STORE_COMMIT=y
 CONFIG_DIFFTEST_REF_PATH="none"
 CONFIG_DIFFTEST_REF_NAME="none"
-# CONFIG_IQUEUE is not set
+CONFIG_IQUEUE=y
 # CONFIG_MEMLOG is not set
 # CONFIG_TRANSLOG is not set
 # CONFIG_EXITLOG is not set
-# CONFIG_TRACE_INST is not set
+CONFIG_TRACE_INST=y
 # CONFIG_TRACE_BB is not set
 # CONFIG_SIMPOINT_LOG is not set
 # end of Testing and Debugging
