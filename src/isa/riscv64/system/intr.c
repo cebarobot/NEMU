@@ -69,7 +69,23 @@ static word_t get_trap_pc(word_t xtvec, word_t xcause) {
   return (is_intr && mode==1) ? (base + (cause_no << 2)) : base;
 }
 
+word_t count_sti = 0;
+word_t count_vsti = 0;
+word_t count_mti = 0;
+
 word_t raise_intr(word_t NO, vaddr_t epc) {
+  if (NO == 0x8000000000000005ULL) {
+    count_sti += 1;
+  }
+  if (NO == 0x8000000000000006ULL) {
+    count_vsti += 1;
+  }
+  if (NO == 0x8000000000000007ULL) {
+    count_mti += 1;
+  }
+  if (NO & INTR_BIT) {
+    Log("count_sti: %ld, count_vsti: %ld, count_mti: %ld", count_sti, count_vsti, count_mti);
+  }
   Logti("raise intr cause NO: %ld, epc: %lx\n", NO, epc);
 #ifdef CONFIG_DIFFTEST_REF_SPIKE
   switch (NO) {
