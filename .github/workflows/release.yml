@@ -61,8 +61,8 @@ jobs:
           existing_tags=$(git tag -l "${prefix}.*" | sort -V)
           
           if [ -z "$existing_tags" ]; then
-            # No version in this year/month.
-            micro=0
+            # No version in this year/month, start from 1
+            micro=1
           else
             # Micro + 1
             last_tag=$(echo "$existing_tags" | tail -n 1)
@@ -114,27 +114,23 @@ jobs:
           done
 
       - name: Generate release notes
-        id: release_notes
         run: |
-          latest_tag="${{ needs.check-and-release.outputs.latest_tag }}"
           new_tag="${{ needs.check-and-release.outputs.new_tag }}"
+          year=$(echo "$new_tag" | cut -d'.' -f1)
+          month=$(echo "$new_tag" | cut -d'.' -f2)
+          micro=$(echo "$new_tag" | cut -d'.' -f3)
+          month_name=$(date -d "${year}-${month}-01" +"%B")
+          release_date=$(TZ='Asia/Shanghai' date +"%B %-d, %Y")
           
-          echo "# Release $new_tag" > RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "## Changes" >> RELEASE_NOTES.md
+          cat > RELEASE_NOTES.md << EOF
+          Release version ${new_tag} is the ${micro}th release in ${month_name} ${year}, released on ${release_date}.
           
-          if [ -z "$latest_tag" ]; then
-            echo "First release" >> RELEASE_NOTES.md
-          else
-            git log ${latest_tag}..HEAD --pretty=format:"- %s (%h)" >> RELEASE_NOTES.md
-          fi
-          
-          echo "" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "## Artifacts" >> RELEASE_NOTES.md
-          echo "- \`difftest-so-${new_tag}-ubuntu-20.04.tar.gz\`: Compiled on Ubuntu 20.04" >> RELEASE_NOTES.md
-          echo "- \`difftest-so-${new_tag}-ubuntu-22.04.tar.gz\`: Compiled on Ubuntu 22.04" >> RELEASE_NOTES.md
-          echo "- \`difftest-so-${new_tag}-ubuntu-24.04.tar.gz\`: Compiled on Ubuntu 24.04" >> RELEASE_NOTES.md
+          ## Artifacts
+          The release includes pre-compiled difftest shared objects for different Ubuntu versions:
+          - \`difftest-so-${new_tag}-ubuntu-20.04.tar.gz\`: Compiled on Ubuntu 20.04, good for CentOS 7.
+          - \`difftest-so-${new_tag}-ubuntu-22.04.tar.gz\`: Compiled on Ubuntu 22.04
+          - \`difftest-so-${new_tag}-ubuntu-24.04.tar.gz\`: Compiled on Ubuntu 24.04
+          EOF
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -144,6 +140,7 @@ jobs:
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
+          generate_release_notes: true
           files: |
             release-files/*.tar.gz
         env:
