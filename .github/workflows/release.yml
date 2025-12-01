@@ -1,0 +1,149 @@
+name: Auto Release
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # 12:00 UTC+8
+  workflow_dispatch:
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check_diff.outputs.should_release }}
+      new_tag: ${{ steps.generate_tag.outputs.new_tag }}
+      latest_tag: ${{ steps.get_latest_tag.outputs.latest_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest release tag
+        id: get_latest_tag
+        run: |
+          latest_tag=$(git tag --sort=-version:refname | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            echo "No previous release found"
+            echo "latest_tag=" >> $GITHUB_OUTPUT
+          else
+            echo "Latest tag: $latest_tag"
+            echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for changes since last release
+        id: check_diff
+        run: |
+          latest_tag="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          if [ -z "$latest_tag" ]; then
+            echo "No previous release, will create first release"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          else
+            diff_count=$(git rev-list ${latest_tag}..HEAD --count)
+            if [ "$diff_count" -eq "0" ]; then
+              echo "No changes since last release ($latest_tag)"
+              echo "should_release=false" >> $GITHUB_OUTPUT
+            else
+              echo "Found $diff_count commits since last release"
+              echo "should_release=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Generate CalVer tag
+        id: generate_tag
+        if: steps.check_diff.outputs.should_release == 'true'
+        run: |
+          # 获取当前日期 (UTC+8)
+          TZ='Asia/Shanghai' year=$(date +%Y)
+          TZ='Asia/Shanghai' month=$(date +%m)
+          
+          # 查找当前年月的所有版本
+          prefix="${year}.${month}"
+          existing_tags=$(git tag -l "${prefix}.*" | sort -V)
+          
+          if [ -z "$existing_tags" ]; then
+            # 如果当前月份没有版本，从1开始
+            micro=1
+          else
+            # 获取最新的 micro 版本号并加1
+            last_tag=$(echo "$existing_tags" | tail -n 1)
+            last_micro=$(echo "$last_tag" | cut -d'.' -f3)
+            micro=$((last_micro + 1))
+          fi
+          
+          new_tag="${year}.${month}.${micro}"
+          echo "New tag: $new_tag"
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+
+  call-ci:
+    needs: check-and-release
+    if: needs.check-and-release.outputs.should_release == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  create-release:
+    needs: [check-and-release, call-ci]
+    if: needs.check-and-release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: difftest-so-*
+          path: release-artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-files
+          cd release-artifacts
+          ls -l
+          for dir in difftest-so-*; do
+            if [ -d "$dir" ]; then
+              container_version=$(echo "$dir" | sed 's/difftest-so-//')
+              cd "$dir"
+              tar -czf "../../release-files/difftest-so-${container_version}.tar.gz" .
+              cd ..
+            fi
+          done
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          latest_tag="${{ needs.check-and-release.outputs.latest_tag }}"
+          new_tag="${{ needs.check-and-release.outputs.new_tag }}"
+          
+          echo "# Release $new_tag" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Changes" >> RELEASE_NOTES.md
+          
+          if [ -z "$latest_tag" ]; then
+            echo "First release" >> RELEASE_NOTES.md
+          else
+            git log ${latest_tag}..HEAD --pretty=format:"- %s (%h)" >> RELEASE_NOTES.md
+          fi
+          
+          echo "" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## Artifacts" >> RELEASE_NOTES.md
+          echo "- \`difftest-so-ubuntu-20.04.tar.gz\`: Compiled for Ubuntu 20.04" >> RELEASE_NOTES.md
+          echo "- \`difftest-so-ubuntu-22.04.tar.gz\`: Compiled for Ubuntu 22.04" >> RELEASE_NOTES.md
+          echo "- \`difftest-so-ubuntu-24.04.tar.gz\`: Compiled for Ubuntu 24.04" >> RELEASE_NOTES.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: 'false'
+        with:
+          tag_name: ${{ needs.check-and-release.outputs.new_tag }}
+          name: Release ${{ needs.check-and-release.outputs.new_tag }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            release-files/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
