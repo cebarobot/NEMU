@@ -74,13 +74,13 @@ jobs:
           echo "New tag: $new_tag"
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
-  call-ci:
-    needs: check-and-release
+  build:
+    needs: build artifacts
     if: needs.check-and-release.outputs.should_release == 'true'
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/build.yml
 
   create-release:
-    needs: [check-and-release, call-ci]
+    needs: [check-and-release, build]
     if: needs.check-and-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
