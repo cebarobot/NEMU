@@ -52,19 +52,19 @@ jobs:
         id: generate_tag
         if: steps.check_diff.outputs.should_release == 'true'
         run: |
-          # 获取当前日期 (UTC+8)
+          # Get current date (UTC+8)
           TZ='Asia/Shanghai' year=$(date +%Y)
           TZ='Asia/Shanghai' month=$(date +%m)
           
-          # 查找当前年月的所有版本
+          # Find all version in this year/month
           prefix="${year}.${month}"
           existing_tags=$(git tag -l "${prefix}.*" | sort -V)
           
           if [ -z "$existing_tags" ]; then
-            # 如果当前月份没有版本，从1开始
-            micro=1
+            # No version in this year/month.
+            micro=0
           else
-            # 获取最新的 micro 版本号并加1
+            # Micro + 1
             last_tag=$(echo "$existing_tags" | tail -n 1)
             last_micro=$(echo "$last_tag" | cut -d'.' -f3)
             micro=$((last_micro + 1))
@@ -75,7 +75,8 @@ jobs:
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
   build:
-    needs: build artifacts
+    name: build artifacts
+    needs: check-and-release
     if: needs.check-and-release.outputs.should_release == 'true'
     uses: ./.github/workflows/build.yml
 
@@ -102,11 +103,12 @@ jobs:
           mkdir -p release-files
           cd release-artifacts
           ls -l
+          new_tag="${{ needs.check-and-release.outputs.new_tag }}"
           for dir in difftest-so-*; do
             if [ -d "$dir" ]; then
               container_version=$(echo "$dir" | sed 's/difftest-so-//')
               cd "$dir"
-              tar -czf "../../release-files/difftest-so-${container_version}.tar.gz" .
+              tar -czf "../../release-files/difftest-so-${new_tag}-${container_version}.tar.gz" .
               cd ..
             fi
           done
@@ -130,13 +132,12 @@ jobs:
           echo "" >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "## Artifacts" >> RELEASE_NOTES.md
-          echo "- \`difftest-so-ubuntu-20.04.tar.gz\`: Compiled for Ubuntu 20.04" >> RELEASE_NOTES.md
-          echo "- \`difftest-so-ubuntu-22.04.tar.gz\`: Compiled for Ubuntu 22.04" >> RELEASE_NOTES.md
-          echo "- \`difftest-so-ubuntu-24.04.tar.gz\`: Compiled for Ubuntu 24.04" >> RELEASE_NOTES.md
+          echo "- \`difftest-so-${new_tag}-ubuntu-20.04.tar.gz\`: Compiled on Ubuntu 20.04" >> RELEASE_NOTES.md
+          echo "- \`difftest-so-${new_tag}-ubuntu-22.04.tar.gz\`: Compiled on Ubuntu 22.04" >> RELEASE_NOTES.md
+          echo "- \`difftest-so-${new_tag}-ubuntu-24.04.tar.gz\`: Compiled on Ubuntu 24.04" >> RELEASE_NOTES.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
-        if: 'false'
         with:
           tag_name: ${{ needs.check-and-release.outputs.new_tag }}
           name: Release ${{ needs.check-and-release.outputs.new_tag }}
