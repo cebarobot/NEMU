@@ -132,8 +132,8 @@ jobs:
           ## Artifacts
           The release includes pre-compiled NEMU shared objects for different configurations:
           - Compilation Platform: Ubuntu 20.04 (compatible with CentOS 7)
-          - CPU types: xs, dual-xs
-          - Build types: ref, ref-debug
+          - CPU: xs, xs-dual
+          - Purpose: ref, ref-debug
           
           Each artifact is named as: \`nemu-{version}-{cpu}-{type}.so\`
           EOF
